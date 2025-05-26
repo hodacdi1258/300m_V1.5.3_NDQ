@@ -70,8 +70,12 @@ class Zalo {
 
   parseCookies(cookie) {
     if (typeof cookie === "string") return cookie;
-    const cookieString = cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-    return cookieString;
+
+    if (Array.isArray(cookie?.cookies)) {
+      return cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    }
+
+    throw new Error("Cookie không hợp lệ: cần chuỗi hoặc mảng cookies hợp lệ.");
   }
 
   validateParams(credentials) {
