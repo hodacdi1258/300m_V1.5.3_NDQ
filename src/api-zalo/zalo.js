@@ -72,31 +72,34 @@ class Zalo {
   }
 
   parseCookies(cookie) {
-    if (typeof cookie === "string") return cookie;
-
-    if (Array.isArray(cookie?.cookies)) {
-      return cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  console.log("parseCookies input:", cookie);
+  
+  if (typeof cookie === "string") {
+    if (cookie.trim().length === 0) {
+      throw new Error("Cookie chuỗi rỗng không hợp lệ");
     }
-
-    throw new Error("Cookie không hợp lệ: cần chuỗi hoặc mảng cookies hợp lệ.");
+    return cookie;
   }
 
-  validateParams(credentials) {
-    if (!credentials) throw new Error("Missing credentials object");
-    if (!credentials.imei) throw new Error("Missing param: imei");
-    if (!credentials.cookie) throw new Error("Missing param: cookie");
-    if (!credentials.userAgent) throw new Error("Missing param: userAgent");
+  if (typeof cookie === "object" && Array.isArray(cookie.cookies)) {
+    if (cookie.cookies.length === 0) {
+      throw new Error("Mảng cookies rỗng không hợp lệ");
+    }
+    return cookie.cookies.map(c => {
+      if (!c.name || !c.value) throw new Error("Cookie item thiếu name hoặc value");
+      return `${c.name}=${c.value}`;
+    }).join("; ");
   }
 
-  async login() {
-    await checkUpdate();
+  throw new Error("Cookie không hợp lệ: cần chuỗi cookie không rỗng hoặc object có mảng cookies hợp lệ.");
+}
 
-    const loginData = await login(this.enableEncryptParam);
-    const serverInfo = await getServerInfo(this.enableEncryptParam);
-
-    if (!loginData || !serverInfo) {
-      throw new Error("Failed to login or fetch server info");
-    }
+validateParams(credentials) {
+  if (!credentials) throw new Error("Missing credentials object");
+  if (!credentials.imei) throw new Error("Missing param: imei");
+  if (!credentials.cookie) throw new Error("Missing param: cookie");
+  if (!credentials.userAgent) throw new Error("Missing param: userAgent");
+}
 
     appContext.secretKey = loginData.data.zpw_enk;
     appContext.uid = loginData.data.uid;
