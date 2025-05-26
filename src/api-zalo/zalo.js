@@ -56,45 +56,55 @@ import { uploadThumbnailFactory } from "./apis/uploadThumbnail.js";
 import { sendMessageForwardFactory } from "./apis/sendMessageForward.js";
 
 class Zalo {
-  constructor(credentials, options) {
+  constructor(credentials, options = {}) {
     this.enableEncryptParam = true;
     this.validateParams(credentials);
+
     appContext.imei = credentials.imei;
     appContext.cookie = this.parseCookies(credentials.cookie);
     appContext.userAgent = credentials.userAgent;
     appContext.language = credentials.language || "vi";
     appContext.timeMessage = credentials.timeMessage || 0;
     appContext.secretKey = null;
-    if (options) Object.assign(appContext.options, options);
+
+    // Gộp options nếu có
+    Object.assign(appContext.options, options);
   }
 
   parseCookies(cookie) {
-  if (typeof cookie === "string") return cookie;
+    if (typeof cookie === "string") return cookie;
 
-  if (Array.isArray(cookie?.cookies)) {
-    return cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    if (Array.isArray(cookie?.cookies)) {
+      return cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    }
+
+    throw new Error("Cookie không hợp lệ: cần chuỗi hoặc mảng cookies hợp lệ.");
   }
 
-  // thêm đoạn này để hỗ trợ object key-value
-  if (typeof cookie === "object") {
-    return Object.entries(cookie)
-      .map(([name, value]) => `${name}=${value}`)
-      .join("; ");
+  validateParams(credentials) {
+    if (!credentials) throw new Error("Missing credentials object");
+    if (!credentials.imei) throw new Error("Missing param: imei");
+    if (!credentials.cookie) throw new Error("Missing param: cookie");
+    if (!credentials.userAgent) throw new Error("Missing param: userAgent");
   }
-
-  throw new Error("Cookie không hợp lệ: cần chuỗi hoặc mảng cookies hợp lệ.");
-}
 
   async login() {
     await checkUpdate();
+
     const loginData = await login(this.enableEncryptParam);
     const serverInfo = await getServerInfo(this.enableEncryptParam);
-    if (!loginData || !serverInfo) throw new Error("Failed to login");
+
+    if (!loginData || !serverInfo) {
+      throw new Error("Failed to login or fetch server info");
+    }
+
     appContext.secretKey = loginData.data.zpw_enk;
     appContext.uid = loginData.data.uid;
     setBotId(loginData.data.uid);
-    appContext.settings = serverInfo.setttings || serverInfo.settings;
+    appContext.settings = serverInfo.settings || serverInfo.setttings; // phòng trường hợp typo
+
     logger.info("Logged in as", loginData.data.uid);
+
     return new API(
       appContext.secretKey,
       loginData.data.zpw_service_map_v3,
@@ -115,6 +125,7 @@ class API {
     this.secretKey = secretKey;
     this.zpwServiceMap = zpwServiceMap;
     this.listener = new Listener(wsUrl);
+
     this.getOwnId = getOwnId;
     this.getStickers = getStickersFactory(this);
     this.getStickersDetail = getStickersDetailFactory(this);
