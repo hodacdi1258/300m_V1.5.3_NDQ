@@ -72,21 +72,19 @@ class Zalo {
 
   parseCookies(cookie) {
     if (typeof cookie === "string") {
-      if (!cookie.trim()) {
-        throw new Error("Cookie chuỗi rỗng không hợp lệ");
-      }
-      return cookie;
+      const trimmed = cookie.trim();
+      if (!trimmed) throw new Error("Cookie chuỗi rỗng không hợp lệ");
+      return trimmed;
     }
 
-    if (typeof cookie === "object" && Array.isArray(cookie.cookies)) {
-      if (cookie.cookies.length === 0) {
-        throw new Error("Mảng cookies rỗng không hợp lệ");
+    if (typeof cookie === "object") {
+      const cookiesArray = cookie.cookies || cookie;
+      if (Array.isArray(cookiesArray) && cookiesArray.length > 0) {
+        return cookiesArray.map(c => {
+          if (!c.name || !c.value) throw new Error("Cookie item thiếu name hoặc value");
+          return `${c.name}=${c.value}`;
+        }).join("; ");
       }
-
-      return cookie.cookies.map(c => {
-        if (!c.name || !c.value) throw new Error("Cookie item thiếu name hoặc value");
-        return `${c.name}=${c.value}`;
-      }).join("; ");
     }
 
     throw new Error("Cookie không hợp lệ: cần chuỗi hoặc object cookies");
