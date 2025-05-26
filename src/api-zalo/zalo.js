@@ -69,20 +69,21 @@ class Zalo {
   }
 
   parseCookies(cookie) {
-    if (typeof cookie === "string") return cookie;
+  if (typeof cookie === "string") return cookie;
 
-    if (Array.isArray(cookie?.cookies)) {
-      return cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-    }
-
-    throw new Error("Cookie không hợp lệ: cần chuỗi hoặc mảng cookies hợp lệ.");
+  if (Array.isArray(cookie?.cookies)) {
+    return cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
   }
 
-  validateParams(credentials) {
-    if (!credentials.imei || !credentials.cookie || !credentials.userAgent) {
-      throw new Error("Missing required params");
-    }
+  // thêm đoạn này để hỗ trợ object key-value
+  if (typeof cookie === "object") {
+    return Object.entries(cookie)
+      .map(([name, value]) => `${name}=${value}`)
+      .join("; ");
   }
+
+  throw new Error("Cookie không hợp lệ: cần chuỗi hoặc mảng cookies hợp lệ.");
+}
 
   async login() {
     await checkUpdate();
