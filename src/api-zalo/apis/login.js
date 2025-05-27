@@ -1,26 +1,64 @@
 import { appContext } from "../context.js";
 import { Zalo } from "../index.js";
 import { decryptResp, getSignKey, makeURL, ParamsEncryptor, request } from "../utils.js";
+
 export async function login(encryptParams) {
     const encryptedParams = await getEncryptParam(appContext.imei, appContext.language, encryptParams, "getlogininfo");
+
     try {
-        const response = await request(makeURL("https://wpa.chat.zalo.me/api/login/getLoginInfo", Object.assign(Object.assign({}, encryptedParams.params), { nretry: 0 })));
-        if (!response.ok)
-            throw new Error("Failed to fetch login info: " + response.statusText);
+        const response = await request(makeURL("https://wpa.chat.zalo.me/api/login/getLoginInfo", {
+            ...encryptedParams.params,
+            nretry: 0
+        }));
+
+        if (!response.ok) throw new Error("Failed to fetch login info: " + response.statusText);
+
         const data = await response.json();
+
+        if (!data?.data) {
+            return {
+                success: false,
+                error: "Phản hồi không chứa dữ liệu cần thiết.",
+                raw: data
+            };
+        }
+
         if (encryptedParams.enk) {
             const decryptedData = decryptResp(encryptedParams.enk, data.data);
-            return decryptedData != null && typeof decryptedData != "string" ? decryptedData : null;
+
+            if (!decryptedData || typeof decryptedData === "string") {
+                console.error("Dữ liệu giải mã không hợp lệ:", decryptedData);
+                return {
+                    success: false,
+                    error: "Dữ liệu giải mã không hợp lệ.",
+                    raw: data
+                };
+            }
+
+            return {
+                success: true,
+                data: decryptedData
+            };
         }
-        return null;
-    }
-    catch (error) {
-        console.error(error);
-        throw new Error("Failed to fetch login info: " + error);
+
+        return {
+            success: false,
+            error: "Không có khóa mã hóa (enk).",
+            raw: data
+        };
+
+    } catch (error) {
+        console.error("Lỗi khi login:", error);
+        return {
+            success: false,
+            error: error.message
+        };
     }
 }
+
 export async function getServerInfo(encryptParams) {
     const encryptedParams = await getEncryptParam(appContext.imei, appContext.language, encryptParams, "getserverinfo");
+
     try {
         const response = await request(makeURL("https://wpa.chat.zalo.me/api/login/getServerInfo", {
             imei: appContext.imei,
@@ -29,18 +67,23 @@ export async function getServerInfo(encryptParams) {
             computer_name: "Web",
             signkey: encryptedParams.params.signkey,
         }));
+
         if (!response.ok)
             throw new Error("Failed to fetch server info: " + response.statusText);
+
         const data = await response.json();
-        if (data.data == null)
-            throw new Error("Failed to fetch server info: " + data.error);
+
+        if (!data?.data)
+            throw new Error("Không nhận được dữ liệu server: " + data.error);
+
         return data.data;
-    }
-    catch (error) {
-        console.error(error);
-        throw new Error("Failed to fetch server info: " + error);
+
+    } catch (error) {
+        console.error("Lỗi khi lấy server info:", error);
+        throw new Error("Failed to fetch server info: " + error.message);
     }
 }
+
 async function getEncryptParam(imei, language, encryptParams, type) {
     const params = {};
     const data = {
@@ -49,18 +92,21 @@ async function getEncryptParam(imei, language, encryptParams, type) {
         language,
         ts: Date.now(),
     };
+
     const encryptedData = await _encryptParam(data, encryptParams);
-    if (encryptedData == null)
+
+    if (encryptedData == null) {
         Object.assign(params, data);
-    else {
+    } else {
         const { encrypted_params, encrypted_data } = encryptedData;
         Object.assign(params, encrypted_params);
         params.params = encrypted_data;
     }
+
     params.type = Zalo.API_TYPE;
     params.client_version = Zalo.API_VERSION;
     params.signkey =
-        type == "getserverinfo"
+        type === "getserverinfo"
             ? getSignKey(type, {
                 imei: appContext.imei,
                 type: Zalo.API_TYPE,
@@ -68,11 +114,13 @@ async function getEncryptParam(imei, language, encryptParams, type) {
                 computer_name: "Web",
             })
             : getSignKey(type, params);
+
     return {
         params,
         enk: encryptedData ? encryptedData.enk : null,
     };
 }
+
 async function _encryptParam(data, encryptParams) {
     if (encryptParams) {
         const encryptor = new ParamsEncryptor({
@@ -80,11 +128,13 @@ async function _encryptParam(data, encryptParams) {
             imei: data.imei,
             firstLaunchTime: Date.now(),
         });
+
         try {
             const stringifiedData = JSON.stringify(data);
             const encryptedKey = encryptor.getEncryptKey();
             const encodedData = ParamsEncryptor.encodeAES(encryptedKey, stringifiedData, "base64", false);
             const params = encryptor.getParams();
+
             return params
                 ? {
                     encrypted_data: encodedData,
@@ -92,10 +142,10 @@ async function _encryptParam(data, encryptParams) {
                     enk: encryptedKey,
                 }
                 : null;
-        }
-        catch (error) {
-            throw new Error("Failed to encrypt params: " + error);
+        } catch (error) {
+            throw new Error("Mã hóa thất bại: " + error.message);
         }
     }
+
     return null;
 }
