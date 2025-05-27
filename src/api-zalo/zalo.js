@@ -56,71 +56,59 @@ import { uploadThumbnailFactory } from "./apis/uploadThumbnail.js";
 import { sendMessageForwardFactory } from "./apis/sendMessageForward.js";
 
 class Zalo {
-  constructor(credentials, options = {}) {
+  constructor(credentials, options) {
     this.enableEncryptParam = true;
     this.validateParams(credentials);
-
     appContext.imei = credentials.imei;
     appContext.cookie = this.parseCookies(credentials.cookie);
     appContext.userAgent = credentials.userAgent;
     appContext.language = credentials.language || "vi";
     appContext.timeMessage = credentials.timeMessage || 0;
     appContext.secretKey = null;
-
-    Object.assign(appContext.options, options);
+    if (options) Object.assign(appContext.options, options);
   }
 
   parseCookies(cookie) {
     if (typeof cookie === "string") {
-      const trimmed = cookie.trim();
-      if (!trimmed) throw new Error("Cookie chuỗi rỗng không hợp lệ");
-      return trimmed;
+      return cookie;
     }
-
-    if (typeof cookie === "object") {
-      const cookiesArray = cookie.cookies || cookie;
-      if (Array.isArray(cookiesArray) && cookiesArray.length > 0) {
-        return cookiesArray.map(c => {
-          if (!c.name || !c.value) throw new Error("Cookie item thiếu name hoặc value");
-          return `${c.name}=${c.value}`;
-        }).join("; ");
-      }
+  
+    // Nếu object có cookies là array: [{ name, value }]
+    if (cookie && Array.isArray(cookie.cookies)) {
+      return cookie.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
     }
-
-    throw new Error("Cookie không hợp lệ: cần chuỗi hoặc object cookies");
+  
+    // Nếu object là dạng { key1: value1, key2: value2 }
+    if (cookie && typeof cookie === "object") {
+      return Object.entries(cookie).map(([key, value]) => `${key}=${value}`).join("; ");
+    }
+  
+    throw new Error("Invalid cookie format: expected a string or an object with a 'cookies' array.");
   }
 
   validateParams(credentials) {
-    if (!credentials) throw new Error("Thiếu credentials");
-    if (!credentials.imei) throw new Error("Thiếu param: imei");
-    if (!credentials.cookie) throw new Error("Thiếu param: cookie");
-    if (!credentials.userAgent) throw new Error("Thiếu param: userAgent");
+    if (!credentials.imei || !credentials.cookie || !credentials.userAgent) {
+      throw new Error("Missing required params");
+    }
   }
 
   async login() {
     await checkUpdate();
-
     const loginData = await login(this.enableEncryptParam);
     const serverInfo = await getServerInfo(this.enableEncryptParam);
-
-    if (!loginData || !serverInfo) {
-      throw new Error("Đăng nhập thất bại hoặc không lấy được thông tin server");
-    }
-
+    if (!loginData || !serverInfo) throw new Error("Failed to login");
     appContext.secretKey = loginData.data.zpw_enk;
     appContext.uid = loginData.data.uid;
     setBotId(loginData.data.uid);
-    appContext.settings = serverInfo.settings || serverInfo.setttings;
-
+    appContext.settings = serverInfo.setttings || serverInfo.settings;
     logger.info("Logged in as", loginData.data.uid);
-
     return new API(
       appContext.secretKey,
       loginData.data.zpw_service_map_v3,
       makeURL(`${loginData.data.zpw_ws[0]}`, {
         zpw_ver: Zalo.API_VERSION,
         zpw_type: Zalo.API_TYPE,
-        t: Date.now()
+        t: Date.now(),
       })
     );
   }
@@ -134,7 +122,6 @@ class API {
     this.secretKey = secretKey;
     this.zpwServiceMap = zpwServiceMap;
     this.listener = new Listener(wsUrl);
-
     this.getOwnId = getOwnId;
     this.getStickers = getStickersFactory(this);
     this.getStickersDetail = getStickersDetailFactory(this);
